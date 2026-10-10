@@ -1,0 +1,73 @@
+# Go API Gateway 默认配置
+# 环境变量覆盖前缀: GATEWAY_
+# 例如 GATEWAY_SERVER_DATA_PORT=9090
+
+server:
+  data:
+    host: "0.0.0.0"
+    port: 8080
+    read_timeout: 10s
+    write_timeout: 30s
+    idle_timeout: 120s
+    max_header_bytes: 1048576  # 1MB
+  admin:
+    host: "0.0.0.0"
+    port: 8081
+
+config_store:
+  driver: "sqlite"  # sqlite / mysql
+  dsn: "./data/gateway.db"
+  max_open_conns: 100
+  max_idle_conns: 20
+  conn_max_lifetime: 300s
+
+etcd:
+  endpoints:
+    - "127.0.0.1:2379"
+  dial_timeout: 5s
+  auto_sync_interval: 60s
+
+redis:
+  addr: "127.0.0.1:6379"
+  password: ""
+  db: 0
+  pool_size: 50
+  min_idle_conns: 10
+  max_idle_conns: 1000
+  dial_timeout: 5s
+  read_timeout: 3s
+  write_timeout: 3s
+
+admin:
+  auth:
+    enabled: true
+    default_username: "admin"
+    tokens:
+      - token: "admin-token-dev-001"
+        username: "admin"
+
+log:
+  level: "info"  # debug/info/warn/error
+  format: "json"  # json / console
+  output: "stdout"  # stdout / file path
+  async: true
+
+trace:
+  enabled: true
+  sampler: "always"  # always / ratio / never
+  sample_ratio: 0.1
+  exporter: "stdout"  # stdout / otlp
+  otlp_endpoint: ""
+
+ratelimit:
+  prefetch_interval: 100ms
+  prefetch_factor: 2
+  global_refill_interval: 1s
+  key_ttl: 3600s
+
+circuitbreaker:
+  event_channel: "gateway:circuit:events"
+
+health:
+  startup_duration: 60s
+  check_interval: 10s

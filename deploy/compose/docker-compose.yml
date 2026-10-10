@@ -1,0 +1,103 @@
+version: "3.8"
+
+services:
+  gateway:
+    build:
+      context: ../..
+      dockerfile: deploy/docker/Dockerfile
+    container_name: go-api-gateway
+    ports:
+      - "8080:8080"                          # Data plane (external)
+      - "127.0.0.1:8081:8081"                # Admin plane (loopback only, P1-8)
+    environment:
+      - GATEWAY_ETCD_ENDPOINTS=http://etcd:2379
+      - GATEWAY_REDIS_ADDR=redis:6379
+      - GATEWAY_CONFIG_STORE_DRIVER=sqlite
+      - GATEWAY_CONFIG_STORE_DSN=/data/gateway.db
+      - GATEWAY_LOG_LEVEL=info
+    volumes:
+      - gateway-data:/data
+    depends_on:
+      etcd:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    mem_limit: 256m
+    restart: unless-stopped
+    networks:
+      - gateway-net
+
+  etcd:
+    image: bitnami/etcd:3.5.15
+    container_name: go-api-gateway-etcd
+    environment:
+      - ALLOW_NONE_AUTHENTICATION=yes
+      - ETCD_ADVERTISE_CLIENT_URLS=http://etcd:2379
+      - ETCDCTL_API=3                          # P2-8: etcdctl API v3
+    ports:
+      - "2379:2379"
+    mem_limit: 256m
+    healthcheck:
+      test: ["CMD", "etcdctl", "--endpoints=http://localhost:2379", "endpoint", "health"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+    networks:
+      - gateway-net
+
+  redis:
+    image: redis:7.2-alpine
+    container_name: go-api-gateway-redis
+    ports:
+      - "6379:6379"
+    mem_limit: 128m
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+    networks:
+      - gateway-net
+
+  # Test service A (with database + OTel)
+  test-service-a:
+    image: golang:1.22-alpine
+    container_name: go-api-gateway-test-a
+    working_dir: /app
+    command: sh -c "echo 'package main; import (\"net/http\";\"fmt\"); func main(){http.HandleFunc(\"/health\",func(w http.ResponseWriter,r*http.Request){w.WriteHeader(200);fmt.Fprint(w,\"ok\")});http.HandleFunc(\"/echo\",func(w http.ResponseWriter,r*http.Request){fmt.Fprintf(w,\"{\\\"service\\\":\\\"service-a\\\",\\\"trace_id\\\":\\\"%s\\\"}\",r.Header.Get(\"traceparent\"))});http.ListenAndServe(\":8080\",nil)}' > main.go && go run main.go"
+    environment:
+      - SERVICE_NAME=service-a
+      - SERVICE_PORT=8080
+      - ETCD_ENDPOINTS=http://etcd:2379
+    ports:
+      - "8090:8080"
+    depends_on:
+      - etcd
+    mem_limit: 64m
+    networks:
+      - gateway-net
+
+  # Test service B (canary version)
+  test-service-b:
+    image: golang:1.22-alpine
+    container_name: go-api-gateway-test-b
+    working_dir: /app
+    command: sh -c "echo 'package main; import (\"net/http\";\"fmt\"); func main(){http.HandleFunc(\"/health\",func(w http.ResponseWriter,r*http.Request){w.WriteHeader(200);fmt.Fprint(w,\"ok\")});http.HandleFunc(\"/echo\",func(w http.ResponseWriter,r*http.Request){fmt.Fprintf(w,\"{\\\"service\\\":\\\"service-b\\\",\\\"version\\\":\\\"canary\\\",\\\"trace_id\\\":\\\"%s\\\"}\",r.Header.Get(\"traceparent\"))});http.ListenAndServe(\":8080\",nil)}' > main.go && go run main.go"
+    environment:
+      - SERVICE_NAME=service-b
+      - SERVICE_PORT=8080
+      - ETCD_ENDPOINTS=http://etcd:2379
+    ports:
+      - "8091:8080"
+    depends_on:
+      - etcd
+    mem_limit: 64m
+    networks:
+      - gateway-net
+
+volumes:
+  gateway-data:
+
+networks:
+  gateway-net:
+    driver: bridge

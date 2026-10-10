@@ -1,0 +1,61 @@
+# Binaries
+bin/
+*.exe
+*.exe~
+*.dll
+*.so
+*.dylib
+
+# Test binary
+*.test
+
+# Output
+*.out
+
+# Go workspace
+go.work
+go.work.sum
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Data
+data/
+*.db
+*.db-journal
+
+# Logs
+logs/
+*.log
+
+# Env
+.env
+.env.local
+.env.*.local
+
+# Frontend (web/)
+node_modules/
+dist/
+*.local
+
+# Go vendor (if used)
+vendor/
+
+# Test service binaries
+test-services/*.exe
+
+# Coverage
+coverage.out
+coverage.html
+
+# Temporary / scratch
+*.tmp
+*.bak
+~$*
